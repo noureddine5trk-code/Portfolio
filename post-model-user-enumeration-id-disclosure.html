@@ -1,0 +1,57 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#070b1f"><title>Report model: user enumeration and identifier disclosure on an account-existence endpoint — N. TERIKI</title><meta name="description" content="A sanitized bug bounty report model: an unauthenticated account-existence endpoint that leaks which emails are registered, plus an internal ID and token."><meta property="og:title" content="Report model: user enumeration and identifier disclosure on an account-existence endpoint — N. TERIKI"><meta property="og:description" content="A sanitized bug bounty report model: an unauthenticated account-existence endpoint that leaks which emails are registered, plus an internal ID and token."><meta property="og:image" content="https://noureddine5trk-code.github.io/assets/img/profile.jpg"><meta name="twitter:card" content="summary_large_image"><link rel="icon" href="/assets/img/avatar.jpg" type="image/jpeg"><link rel="stylesheet" href="/assets/css/style.css"></head> <body><div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div><div class="cursor-glow" aria-hidden="true"></div> <div class="wrap"> <header class="glass nav"> <a class="brand" href="/"><img src="/assets/img/avatar.jpg" alt="" width="34" height="34">N. TERIKI</a> <nav aria-label="Main"> <a href="/">Home</a><a href="/about.html">About</a><a href="/blog.html" aria-current="page">Blog</a><a href="/profiles.html">Profiles</a><a href="/contact.html">Contact</a> </nav> </header> <main> <article class="glass prose"> <a href="/posts/bug-bounty-report-models.html">← All report models</a> <p class="meta">HackerOne · Report model</p> <h1>Report model: user enumeration and identifier disclosure on an account-existence endpoint</h1> <div><span class="tag">user-enumeration</span><span class="tag">info-disclosure</span><span class="tag">api</span><span class="tag">report-model</span></div><p class="muted">Sanitized model: placeholders only, illustrative values. See the <a href="/posts/bug-bounty-report-models.html#safe-testing-checklist">safe-testing checklist</a> before testing anything.</p>
+<h2 id="placeholders">Placeholders</h2>
+<table><thead><tr><th>Placeholder</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>&lt;TARGET_HOST&gt;</code></td><td>In-scope host listed by the program</td></tr>
+<tr><td><code>&lt;API_PREFIX&gt;</code></td><td>API path prefix of the account service</td></tr>
+<tr><td><code>&lt;YOUR_ACCOUNT_EMAIL&gt;</code></td><td>An account you own and registered for testing</td></tr>
+<tr><td><code>&lt;UNUSED_EMAIL&gt;</code></td><td>An address you control that is not registered</td></tr>
+</tbody></table>
+<hr>
+<h2 id="summary">Summary</h2>
+<p>An endpoint meant to tell whether an email address is registered answers differently depending on whether the account exists, which allows <strong>user enumeration</strong>. For existing accounts it also returns an internal user identifier and a token <strong>without authentication</strong>, which is <strong>sensitive data disclosure</strong>.</p>
+<h2 id="two-issues">Two issues</h2>
+<ul>
+<li><strong>A — User enumeration:</strong> the two answers are binary and unambiguous, with no generic "check your email" message.</li>
+<li><strong>B — Identifier and token disclosure:</strong> an account-existence check has no reason to return either field.</li>
+</ul>
+<h2 id="steps-to-reproduce">Steps to reproduce</h2>
+<p><strong>Step 1 — an existing account (your own)</strong></p>
+<pre style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0"><code>curl -s &quot;https://&lt;TARGET_HOST&gt;/&lt;API_PREFIX&gt;/user/exists?email=&lt;YOUR_ACCOUNT_EMAIL&gt;&quot; \
+  -H &quot;Accept: application/json&quot;</code></pre>
+<pre style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0"><code>{
+  &quot;userId&quot;: &quot;&lt;REDACTED_NUMERIC_ID&gt;&quot;,
+  &quot;userToken&quot;: &quot;&lt;REDACTED_TOKEN&gt;&quot;,
+  &quot;status&quot;: &quot;success&quot;
+}</code></pre>
+<p><strong>Step 2 — an address that is not registered</strong></p>
+<pre style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0"><code>curl -s &quot;https://&lt;TARGET_HOST&gt;/&lt;API_PREFIX&gt;/user/exists?email=&lt;UNUSED_EMAIL&gt;&quot; \
+  -H &quot;Accept: application/json&quot;</code></pre>
+<pre style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0"><code>{
+  &quot;error&quot;: [{ &quot;errorCode&quot;: &quot;&lt;NOT_FOUND_CODE&gt;&quot; }]
+}</code></pre>
+<h2 id="evidence-redacted">Evidence (redacted)</h2>
+<ul>
+<li>Both request / response pairs side by side, with the identifier and the token masked.</li>
+<li>A note that no cookie, session or authorization header was sent.</li>
+</ul>
+<h2 id="impact">Impact</h2>
+<ul>
+<li><strong>Enumeration:</strong> anyone can confirm which email addresses have an account, which helps phishing and credential-stuffing lists.</li>
+<li><strong>Identifier disclosure:</strong> an internal user ID is useful for testing other endpoints that take a user identifier.</li>
+<li><strong>Token disclosure:</strong> a token returned without authentication is a significant exposure on its own. State clearly what you verified, and do not speculate about what it grants.</li>
+</ul>
+<h2 id="remediation">Remediation</h2>
+<ul>
+<li>Return the same generic response whether the address exists or not.</li>
+<li>Remove the user identifier and the token from this response entirely.</li>
+<li>Add CAPTCHA and rate limiting for repeated or automated requests.</li>
+<li>Log and alert on bulk enumeration patterns.</li>
+</ul>
+<h2 id="writing-notes">Writing notes</h2>
+<ul>
+<li>Test with your own account and addresses you control only. Never check real customers' emails; one request on each side is enough.</li>
+<li>Many programs rate pure enumeration as low or exclude it. The identifier and token disclosure is what raises the issue, so lead with it and check the policy exclusions.</li>
+<li>If you test what the token allows, do it with your own account only and say so in the report.</li>
+</ul>
+
+ </article> </main> <footer class="glass foot">© 2026 Noureddine TERIKI</footer> </div> <script src="/assets/js/fx.js" defer></script></body></html>
