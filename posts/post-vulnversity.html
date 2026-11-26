@@ -1,0 +1,97 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#070b1f"><title>Vulnversity — N. TERIKI</title><meta name="description" content="Recon with Nmap and Gobuster, a file-upload extension bypass, and SUID privilege escalation through systemctl."><meta property="og:title" content="Vulnversity — N. TERIKI"><meta property="og:description" content="Recon with Nmap and Gobuster, a file-upload extension bypass, and SUID privilege escalation through systemctl."><meta property="og:image" content="https://noureddine5trk-code.github.io/assets/img/profile.jpg"><meta name="twitter:card" content="summary_large_image"><link rel="icon" href="/assets/img/avatar.jpg" type="image/jpeg"><link rel="stylesheet" href="/assets/css/style.css"></head> <body><div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div><div class="cursor-glow" aria-hidden="true"></div> <div class="wrap"> <header class="glass nav"> <a class="brand" href="/"><img src="/assets/img/avatar.jpg" alt="" width="34" height="34">N. TERIKI</a> <nav aria-label="Main"> <a href="/">Home</a><a href="/about.html">About</a><a href="/blog.html" aria-current="page">Blog</a><a href="/profiles.html">Profiles</a><a href="/contact.html">Contact</a> </nav> </header> <main> <article class="glass prose"> <a href="/blog.html">← All write-ups</a> <p class="meta">TryHackMe</p> <p class="muted" style="margin:0 0 8px">Environment: authorized TryHackMe training room.</p> <h1>Vulnversity</h1> <div><span class="tag">nmap</span><span class="tag">gobuster</span><span class="tag">file-upload</span><span class="tag">burp</span><span class="tag">suid</span><span class="tag">privesc</span></div>  <p><strong>Room:</strong> <a href="https://tryhackme.com/room/vulnversity">Vulnversity</a></p>
+<hr>
+<h2 id="task-1--deploy-the-machine">Task 1 — Deploy the machine</h2>
+<hr>
+<h2 id="task-2--reconnaissance">Task 2 — Reconnaissance</h2>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">nmap</span><span style="color:#79B8FF"> -sV</span><span style="color:#79B8FF"> 10.130.175.112</span></span></code></pre>
+<table>
+<thead>
+<tr>
+<th>Port</th>
+<th>Service</th>
+<th>Version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>21</td>
+<td>ftp</td>
+<td>vsftpd 3.0.5</td>
+</tr>
+<tr>
+<td>22</td>
+<td>ssh</td>
+<td>OpenSSH 8.2p1 Ubuntu</td>
+</tr>
+<tr>
+<td>139/445</td>
+<td>netbios-ssn</td>
+<td>Samba smbd 4.6.2</td>
+</tr>
+<tr>
+<td>3128</td>
+<td>http-proxy</td>
+<td>Squid 4.10</td>
+</tr>
+<tr>
+<td>3333</td>
+<td>http</td>
+<td>Apache 2.4.41 (Ubuntu)</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Ports open: <strong>[redacted]</strong></li>
+<li>Squid proxy version: <strong>[redacted]</strong></li>
+<li>Ports scanned with <code>-p-400</code>: <strong>[redacted]</strong></li>
+<li>Likely OS: <strong>[redacted]</strong></li>
+<li>Web server port: <strong>[redacted]</strong></li>
+<li>Verbose-mode flag: <code>[redacted]</code></li>
+</ul>
+<p>Port 3333 is the one that matters — that’s where the web app lives.</p>
+<hr>
+<h2 id="task-3--gobuster">Task 3 — Gobuster</h2>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">gobuster</span><span style="color:#9ECBFF"> dir</span><span style="color:#79B8FF"> -u</span><span style="color:#9ECBFF"> http://10.130.175.112:3333</span><span style="color:#79B8FF"> -w</span><span style="color:#9ECBFF"> /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt</span></span></code></pre>
+<ul>
+<li>Upload form directory: <code>[redacted]</code></li>
+</ul>
+<hr>
+<h2 id="task-4--compromise-the-webserver">Task 4 — Compromise the Webserver</h2>
+<p><code>/internal/</code> hosts a file upload form. It blocks the obvious one first:</p>
+<ul>
+<li>Blocked extension: <code>[redacted]</code></li>
+</ul>
+<p>Fuzzing a short list (<code>.php3</code>, <code>.php4</code>, <code>.php5</code>, <code>.phtml</code>) through Burp Intruder finds the gap:</p>
+<ul>
+<li>Allowed extension: <code>[redacted]</code></li>
+</ul>
+<p>Rename <a href="https://github.com/pentestmonkey/php-reverse-shell">php-reverse-shell</a> to <code>shell.phtml</code>, point it at your <code>tun0</code> IP, start a listener, upload it:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">nc</span><span style="color:#79B8FF"> -lvnp</span><span style="color:#79B8FF"> 1234</span></span>
+<span class="line"><span style="color:#6A737D"># then browse to:</span></span>
+<span class="line"><span style="color:#B392F0">http://10.130.175.112:3333/internal/uploads/shell.phtml</span></span></code></pre>
+<p>Shell lands as:</p>
+<ul>
+<li>User managing the webserver: <code>[redacted]</code></li>
+<li>User flag: <code>/home/[redacted]/user.txt</code> → <code>[redacted]</code></li>
+</ul>
+<hr>
+<h2 id="task-5--privilege-escalation">Task 5 — Privilege Escalation</h2>
+<p>SUID (set owner user ID) lets a binary run with its <em>owner’s</em> privileges rather than the privileges of whoever launched it. That’s why <code>/usr/bin/passwd</code> — owned by root — can let any regular user edit a password-related file they’d otherwise have no access to: the binary itself briefly runs as root.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">find</span><span style="color:#9ECBFF"> /</span><span style="color:#79B8FF"> -perm</span><span style="color:#79B8FF"> -u=s</span><span style="color:#79B8FF"> -type</span><span style="color:#9ECBFF"> f</span><span style="color:#F97583"> 2></span><span style="color:#9ECBFF">/dev/null</span></span></code></pre>
+<p>One binary jumps out:</p>
+<ul>
+<li>SUID file that stands out: <code>[redacted]</code></li>
+</ul>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">systemctl</span><span style="color:#9ECBFF"> enable</span><span style="color:#9ECBFF"> /tmp/root.service</span></span>
+<span class="line"><span style="color:#B392F0">systemctl</span><span style="color:#9ECBFF"> start</span><span style="color:#9ECBFF"> root</span></span></code></pre>
+<p>Catch the connection, and you’re root.</p>
+<ul>
+<li>Root flag: <code>/root/root.txt</code> → <code>[redacted]</code></li>
+</ul>
+<hr>
+<h2 id="takeaways">Takeaways</h2>
+<ul>
+<li>Open ports and banner versions set the whole attack path — port 3333 was the real target the moment the scan finished.</li>
+<li>Blocklists that filter <code>.php</code> but forget <code>.phtml</code> are a classic upload-bypass gap.</li>
+<li>Any SUID binary that isn’t passwd / sudo — systemctl here hands you root outright.</li>
+</ul> </article> </main> <footer class="glass foot">© 2026 Noureddine TERIKI</footer> </div> <script src="/assets/js/fx.js" defer></script></body></html>
