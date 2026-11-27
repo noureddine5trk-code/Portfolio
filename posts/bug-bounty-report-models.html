@@ -1,0 +1,174 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#070b1f"><title>Bug bounty report models — N. TERIKI</title><meta name="description" content="Three sanitized bug bounty report templates: exposed endpoint, API key in client-side JavaScript, user enumeration."><meta property="og:title" content="Bug bounty report models — N. TERIKI"><meta property="og:description" content="Three sanitized bug bounty report templates: exposed endpoint, API key in client-side JavaScript, user enumeration."><meta property="og:image" content="https://noureddine5trk-code.github.io/assets/img/profile.jpg"><meta name="twitter:card" content="summary_large_image"><link rel="icon" href="/assets/img/avatar.jpg" type="image/jpeg"><link rel="stylesheet" href="/assets/css/style.css"></head> <body><div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div><div class="cursor-glow" aria-hidden="true"></div> <div class="wrap"> <header class="glass nav"> <a class="brand" href="/"><img src="/assets/img/avatar.jpg" alt="" width="34" height="34">N. TERIKI</a> <nav aria-label="Main"> <a href="/">Home</a><a href="/about.html">About</a><a href="/blog.html" aria-current="page">Blog</a><a href="/profiles.html">Profiles</a><a href="/contact.html">Contact</a> </nav> </header> <main> <section class="glass panel" style="max-width:860px;margin:0 auto 16px"> <a href="/blog.html">← Blog</a> <p class="meta">HackerOne · Report models</p> <h1>Bug bounty report models</h1> <div><span class="tag">bug-bounty</span><span class="tag">report-model</span><span class="tag">hackerone</span></div> <p class="muted">Three sanitized report templates (exposed endpoint, API key in client JS, user enumeration).</p> <div><a class="btn ghost" href="#report-health-endpoint">Exposed health endpoint</a><a class="btn ghost" href="#report-client-side-api-key">API key in client JS</a><a class="btn ghost" href="#report-user-enumeration">User enumeration</a></div> </section>
+<article class="glass prose" id="report-health-endpoint" style="margin:0 auto 16px;scroll-margin-top:90px"> <p class="meta">HackerOne · Report model</p> <h2>Report model: unauthenticated health-check endpoint exposing live metrics</h2> <div><span class="tag">info-disclosure</span><span class="tag">misconfiguration</span><span class="tag">recon</span><span class="tag">report-model</span></div><p class="muted">Sanitized model: placeholders only, illustrative values. See the <a href="#safe-testing-checklist">safe-testing checklist</a> before testing anything.</p>
+<h3 id="health-placeholders">Placeholders</h3>
+<table><thead><tr><th>Placeholder</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>&lt;TARGET_HOST&gt;</code></td><td>In-scope host listed by the program</td></tr>
+<tr><td><code>&lt;HEALTHCHECK_PATH&gt;</code></td><td>Path of the monitoring / health-check endpoint</td></tr>
+<tr><td><code>&lt;VALUE&gt;</code>, <code>&lt;COUNTER&gt;</code></td><td>Values returned by the endpoint (masked)</td></tr>
+</tbody></table>
+<hr>
+<h3 id="health-summary">Summary</h3>
+<p><code>https://&lt;TARGET_HOST&gt;/&lt;HEALTHCHECK_PATH&gt;</code> is reachable from the internet without authentication. It returns live production metrics: memory, token and session store sizes, transaction counters, failure counts and response-time statistics. A field name that refers to the production token store shows that this is the live system and not a staging node.</p>
+<h3 id="health-steps-to-reproduce">Steps to reproduce</h3>
+<p><strong>Step 1 — one unauthenticated request</strong></p>
+<pre style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0"><code>curl -s &quot;https://&lt;TARGET_HOST&gt;/&lt;HEALTHCHECK_PATH&gt;&quot;</code></pre>
+<p>Expected: HTTP 200, a JSON body, no authentication challenge.</p>
+<p><strong>Step 2 — confirm the data is live, not cached</strong></p>
+<p>Repeat the request a few times with a short pause. Counters such as total and failed transactions change between calls. A handful of requests is enough.</p>
+<h3 id="health-evidence-redacted">Evidence (redacted)</h3>
+<pre style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0"><code>{
+  &quot;cpu.load&quot;: &quot;&lt;VALUE&gt;&quot;,
+  &quot;total.free.memory&quot;: &quot;&lt;VALUE&gt;&quot;,
+  &quot;token.store.&lt;NAME&gt;.size&quot;: &quot;&lt;VALUE&gt;&quot;,
+  &quot;session.registry.size&quot;: &quot;&lt;VALUE&gt;&quot;,
+  &quot;total.transactions&quot;: &quot;&lt;COUNTER&gt;&quot;,
+  &quot;total.failed.transactions&quot;: &quot;&lt;COUNTER&gt;&quot;,
+  &quot;response.time.max&quot;: &quot;&lt;VALUE&gt;&quot;
+}</code></pre>
+<ul>
+<li>Raw request and response, with UTC timestamps.</li>
+<li>Two responses a few seconds apart showing the counters moving.</li>
+<li>The field name that proves the environment (production vs staging).</li>
+</ul>
+<h3 id="health-impact">Impact</h3>
+<ul>
+<li><strong>Infrastructure fingerprinting</strong> — counter values that differ between consecutive calls suggest several nodes behind a load balancer, which reveals the shape of the cluster.</li>
+<li><strong>Feedback side channel</strong> — a live failure counter tells an outsider whether their authentication traffic reaches the backend.</li>
+<li><strong>Environment confirmation</strong> — names in the output remove any doubt that the node is production.</li>
+<li><strong>Capacity disclosure</strong> — configured limits (for example the session store size) are exposed.</li>
+</ul>
+<p>This is information disclosure, not direct compromise. Rate it honestly and describe what the data enables, not what you did not verify.</p>
+<h3 id="health-remediation">Remediation</h3>
+<ul>
+<li><strong>Immediate:</strong> block external access to the path with the WAF or firewall.</li>
+<li><strong>Short term:</strong> allowlist only the load balancer and monitoring system address ranges.</li>
+<li><strong>Long term:</strong> audit the other diagnostic and admin paths of the same product, and alert on external hits to this path as a reconnaissance canary.</li>
+</ul>
+<h3 id="health-writing-notes">Writing notes</h3>
+<ul>
+<li>Open with the exact URL pattern and the one-line reproduction; triagers read that first.</li>
+<li>Easy-to-find exposures are often reported by several people, so clear steps and timestamps help.</li>
+<li>Keep the impact tied to the data actually returned.</li>
+</ul>
+
+ </article>
+<article class="glass prose" id="report-client-side-api-key" style="margin:0 auto 16px;scroll-margin-top:90px"> <p class="meta">HackerOne · Report model</p> <h2>Report model: third-party API key exposed in client-side JavaScript</h2> <div><span class="tag">api-key</span><span class="tag">client-side</span><span class="tag">secrets</span><span class="tag">report-model</span></div><p class="muted">Sanitized model: placeholders only, illustrative values. See the <a href="#safe-testing-checklist">safe-testing checklist</a> before testing anything.</p>
+<h3 id="apikey-placeholders">Placeholders</h3>
+<table><thead><tr><th>Placeholder</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>&lt;TARGET_HOST&gt;</code></td><td>In-scope host listed by the program</td></tr>
+<tr><td><code>&lt;CONFIG_SCRIPT_PATH&gt;</code></td><td>Public script that ships the client configuration</td></tr>
+<tr><td><code>&lt;VENDOR_API_HOST&gt;</code></td><td>API host of the third-party service</td></tr>
+<tr><td><code>&lt;REDACTED_KEY&gt;</code></td><td>The key — always fully masked in the write-up</td></tr>
+</tbody></table>
+<hr>
+<h3 id="apikey-summary">Summary</h3>
+<p>A key used to authenticate calls to a third-party service (here a ratings and reviews platform) is embedded in plaintext in a public JavaScript file. Anyone can read it and call the vendor API directly, which bypasses the checks the site itself performs: login, verified purchase and rate limiting.</p>
+<h3 id="apikey-technical-background">Technical background</h3>
+<p>Such keys are normally meant to be used server-side, so that the site's backend can enforce its rules before forwarding a request. When the key ships in client-side code, those controls are skipped by anyone who calls the vendor API directly.</p>
+<h3 id="apikey-steps-to-reproduce">Steps to reproduce</h3>
+<p><strong>Step 1 — locate the key</strong></p>
+<p>Load the site with DevTools or an intercepting proxy and find the script that carries the configuration: <code>GET /&lt;CONFIG_SCRIPT_PATH&gt;</code> on <code>&lt;TARGET_HOST&gt;</code>. Look for the key field:</p>
+<pre style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0"><code>APP.params.&lt;service&gt; = {
+    &quot;apiVersion&quot;: &quot;&lt;VERSION&gt;&quot;,
+    &quot;instance&quot;:   &quot;&lt;INSTANCE&gt;&quot;,
+    &quot;passKey&quot;:    &quot;&lt;REDACTED_KEY&gt;&quot;,
+    &quot;submitUrl&quot;:  &quot;https://&lt;VENDOR_API_HOST&gt;/&lt;SUBMIT_ENDPOINT&gt;&quot;
+};</code></pre>
+<p><strong>Step 2 — show the key is accepted without any site credentials</strong></p>
+<p>Send a single request to the vendor API with no cookies and no session. Use the least intrusive form: a preview / validate-only mode if the vendor offers one, otherwise one clearly labelled test entry, within what the program rules allow. Never create real or bulk content.</p>
+<pre style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0"><code>curl -X POST &quot;https://&lt;VENDOR_API_HOST&gt;/&lt;SUBMIT_ENDPOINT&gt;&quot; \
+  -d &quot;passkey=&lt;REDACTED_KEY&gt;&quot; \
+  -d &quot;&lt;required_fields&gt;=&lt;TEST_VALUES&gt;&quot; \
+  -d &quot;action=&lt;preview_or_submit&gt;&quot;</code></pre>
+<p><strong>Step 3 — observe the response</strong></p>
+<p>HTTP 200, an empty error list and a submission identifier mean the request was accepted without any authentication.</p>
+<h3 id="apikey-evidence-redacted">Evidence (redacted)</h3>
+<pre style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0"><code>{
+  &quot;Errors&quot;: [],
+  &quot;SubmissionId&quot;: &quot;&lt;REDACTED&gt;&quot;,
+  &quot;TypicalHoursToPost&quot;: &quot;&lt;HOURS&gt;&quot;
+}</code></pre>
+<ul>
+<li>The request that retrieves the script (key masked).</li>
+<li>The vendor response showing no errors and a submission identifier.</li>
+<li>A note that no cookie, token or account was used.</li>
+</ul>
+<h3 id="apikey-impact">Impact</h3>
+<ul>
+<li>Ratings and reviews can be created outside the site's own controls, so product ratings can be pushed up or down artificially.</li>
+<li>Customers and the company can no longer trust the displayed ratings.</li>
+<li>The exposure may breach the terms of the contract with the vendor.</li>
+<li>No login, purchase check or rate limit applies, so abuse needs very little skill.</li>
+</ul>
+<h3 id="apikey-remediation">Remediation</h3>
+<ul>
+<li><strong>Immediate:</strong> rotate the key and remove it from every client-side file.</li>
+<li><strong>Short term:</strong> move the vendor calls to the backend (server-to-server), enforce purchase verification there, and add per-user rate limiting.</li>
+<li><strong>Long term:</strong> audit all third-party keys present in client-side code and add secret scanning to the CI/CD pipeline.</li>
+</ul>
+<h3 id="apikey-writing-notes">Writing notes</h3>
+<ul>
+<li>Check the vendor documentation: some keys are designed to be public and have a limited scope. A report is stronger when you show that the key is privileged or that it bypasses a control the site really enforces.</li>
+<li>Mask the key consistently everywhere — summary, steps, evidence and screenshots. A partial mask in one place and the full value in another defeats the purpose.</li>
+<li>Prefer a validate-only request over creating data in production.</li>
+</ul>
+
+ </article>
+<article class="glass prose" id="report-user-enumeration" style="margin:0 auto 16px;scroll-margin-top:90px"> <p class="meta">HackerOne · Report model</p> <h2>Report model: user enumeration and identifier disclosure on an account-existence endpoint</h2> <div><span class="tag">user-enumeration</span><span class="tag">info-disclosure</span><span class="tag">api</span><span class="tag">report-model</span></div><p class="muted">Sanitized model: placeholders only, illustrative values. See the <a href="#safe-testing-checklist">safe-testing checklist</a> before testing anything.</p>
+<h3 id="enum-placeholders">Placeholders</h3>
+<table><thead><tr><th>Placeholder</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>&lt;TARGET_HOST&gt;</code></td><td>In-scope host listed by the program</td></tr>
+<tr><td><code>&lt;API_PREFIX&gt;</code></td><td>API path prefix of the account service</td></tr>
+<tr><td><code>&lt;YOUR_ACCOUNT_EMAIL&gt;</code></td><td>An account you own and registered for testing</td></tr>
+<tr><td><code>&lt;UNUSED_EMAIL&gt;</code></td><td>An address you control that is not registered</td></tr>
+</tbody></table>
+<hr>
+<h3 id="enum-summary">Summary</h3>
+<p>An endpoint meant to tell whether an email address is registered answers differently depending on whether the account exists, which allows <strong>user enumeration</strong>. For existing accounts it also returns an internal user identifier and a token <strong>without authentication</strong>, which is <strong>sensitive data disclosure</strong>.</p>
+<h3 id="enum-two-issues">Two issues</h3>
+<ul>
+<li><strong>A — User enumeration:</strong> the two answers are binary and unambiguous, with no generic "check your email" message.</li>
+<li><strong>B — Identifier and token disclosure:</strong> an account-existence check has no reason to return either field.</li>
+</ul>
+<h3 id="enum-steps-to-reproduce">Steps to reproduce</h3>
+<p><strong>Step 1 — an existing account (your own)</strong></p>
+<pre style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0"><code>curl -s &quot;https://&lt;TARGET_HOST&gt;/&lt;API_PREFIX&gt;/user/exists?email=&lt;YOUR_ACCOUNT_EMAIL&gt;&quot; \
+  -H &quot;Accept: application/json&quot;</code></pre>
+<pre style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0"><code>{
+  &quot;userId&quot;: &quot;&lt;REDACTED_NUMERIC_ID&gt;&quot;,
+  &quot;userToken&quot;: &quot;&lt;REDACTED_TOKEN&gt;&quot;,
+  &quot;status&quot;: &quot;success&quot;
+}</code></pre>
+<p><strong>Step 2 — an address that is not registered</strong></p>
+<pre style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0"><code>curl -s &quot;https://&lt;TARGET_HOST&gt;/&lt;API_PREFIX&gt;/user/exists?email=&lt;UNUSED_EMAIL&gt;&quot; \
+  -H &quot;Accept: application/json&quot;</code></pre>
+<pre style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0"><code>{
+  &quot;error&quot;: [{ &quot;errorCode&quot;: &quot;&lt;NOT_FOUND_CODE&gt;&quot; }]
+}</code></pre>
+<h3 id="enum-evidence-redacted">Evidence (redacted)</h3>
+<ul>
+<li>Both request / response pairs side by side, with the identifier and the token masked.</li>
+<li>A note that no cookie, session or authorization header was sent.</li>
+</ul>
+<h3 id="enum-impact">Impact</h3>
+<ul>
+<li><strong>Enumeration:</strong> anyone can confirm which email addresses have an account, which helps phishing and credential-stuffing lists.</li>
+<li><strong>Identifier disclosure:</strong> an internal user ID is useful for testing other endpoints that take a user identifier.</li>
+<li><strong>Token disclosure:</strong> a token returned without authentication is a significant exposure on its own. State clearly what you verified, and do not speculate about what it grants.</li>
+</ul>
+<h3 id="enum-remediation">Remediation</h3>
+<ul>
+<li>Return the same generic response whether the address exists or not.</li>
+<li>Remove the user identifier and the token from this response entirely.</li>
+<li>Add CAPTCHA and rate limiting for repeated or automated requests.</li>
+<li>Log and alert on bulk enumeration patterns.</li>
+</ul>
+<h3 id="enum-writing-notes">Writing notes</h3>
+<ul>
+<li>Test with your own account and addresses you control only. Never check real customers' emails; one request on each side is enough.</li>
+<li>Many programs rate pure enumeration as low or exclude it. The identifier and token disclosure is what raises the issue, so lead with it and check the policy exclusions.</li>
+<li>If you test what the token allows, do it with your own account only and say so in the report.</li>
+</ul>
+
+ </article>
+</main> <footer class="glass foot">© 2026 Noureddine TERIKI</footer> </div> <script src="/assets/js/fx.js" defer></script></body></html>
